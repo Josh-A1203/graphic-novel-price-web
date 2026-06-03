@@ -1,1 +1,1 @@
-# retail-price-tracker
+# graphic-novel-price-web
