@@ -33,9 +33,7 @@ function App() {
               const url = cleanValue(row.url);
               const price = Number(cleanValue(row.price));
 
-              if (!isbn || !title || !retailer || !price || Number.isNaN(price)) {
-                return;
-              }
+              if (!isbn || !title || !retailer || !price || Number.isNaN(price)) return;
 
               if (!groupedBooks[isbn]) {
                 groupedBooks[isbn] = {
@@ -48,11 +46,7 @@ function App() {
                 };
               }
 
-              groupedBooks[isbn].retailers.push({
-                name: retailer,
-                price,
-                url,
-              });
+              groupedBooks[isbn].retailers.push({ name: retailer, price, url });
             });
 
             const formattedBooks = Object.values(groupedBooks)
@@ -69,9 +63,7 @@ function App() {
             setBooks(booksWithCovers);
             setLoadingMessage("");
           },
-          error: () => {
-            setLoadingMessage("Could not parse the price data.");
-          },
+          error: () => setLoadingMessage("Could not parse the price data."),
         });
       })
       .catch(() => {
@@ -108,25 +100,17 @@ function App() {
 
   async function findBestCover(isbn, title) {
     const placeholder = createPlaceholderCover(title);
-
     const openLibraryCover = getOpenLibraryCover(isbn);
-    const openLibraryWorks = await imageExists(openLibraryCover);
 
-    if (openLibraryWorks) {
-      return openLibraryCover;
-    }
+    if (await imageExists(openLibraryCover)) return openLibraryCover;
 
-    const googleCoverByIsbn = await getGoogleBooksCoverByIsbn(isbn);
+    const googleCoverByIsbn = await getGoogleBooksCover(`isbn:${isbn}`);
+    if (googleCoverByIsbn) return googleCoverByIsbn;
 
-    if (googleCoverByIsbn) {
-      return googleCoverByIsbn;
-    }
-
-    const googleCoverByTitle = await getGoogleBooksCoverByTitle(title);
-
-    if (googleCoverByTitle) {
-      return googleCoverByTitle;
-    }
+    const googleCoverByTitle = await getGoogleBooksCover(
+      `intitle:${encodeURIComponent(title)}`
+    );
+    if (googleCoverByTitle) return googleCoverByTitle;
 
     return placeholder;
   }
@@ -134,20 +118,10 @@ function App() {
   async function imageExists(url) {
     return new Promise((resolve) => {
       const image = new Image();
-
       image.onload = () => resolve(true);
       image.onerror = () => resolve(false);
-
       image.src = url;
     });
-  }
-
-  async function getGoogleBooksCoverByIsbn(isbn) {
-    return getGoogleBooksCover(`isbn:${isbn}`);
-  }
-
-  async function getGoogleBooksCoverByTitle(title) {
-    return getGoogleBooksCover(`intitle:${encodeURIComponent(title)}`);
   }
 
   async function getGoogleBooksCover(query) {
@@ -209,15 +183,11 @@ function App() {
 
   function handleJumpToPage(event) {
     event.preventDefault();
-
     const requestedPage = Number(jumpPage);
 
-    if (!requestedPage || Number.isNaN(requestedPage)) {
-      return;
-    }
+    if (!requestedPage || Number.isNaN(requestedPage)) return;
 
     const safePage = Math.min(Math.max(requestedPage, 1), totalPages);
-
     setCurrentPage(safePage);
     setJumpPage("");
   }
@@ -234,9 +204,7 @@ function App() {
 
   function getDiscount(book, price) {
     const highestListedPrice = getHighestListedPrice(book);
-
     if (!highestListedPrice || highestListedPrice <= price) return 0;
-
     return Math.round(((highestListedPrice - price) / highestListedPrice) * 100);
   }
 
@@ -301,11 +269,7 @@ function App() {
 
                 <div className="price-side">
                   <span className="price">${retailer.price.toFixed(2)}</span>
-
-                  {discount > 0 && (
-                    <span className="discount">-{discount}%</span>
-                  )}
-
+                  {discount > 0 && <span className="discount">-{discount}%</span>}
                   {isBest && <span className="best-tag">Best Deal</span>}
 
                   <a
@@ -327,16 +291,11 @@ function App() {
 
   return (
     <main className="app">
-      <header className="hero">
-        <p className="eyebrow">📚 Comic Savings Dashboard</p>
+      <header className="topbar">
         <h1>Graphic Novel Price Tracker</h1>
-        <p>
-          Discover the best deals on graphic novels across your favorite
-          retailers.
-        </p>
 
         <form
-          className="search-bar"
+          className="topbar-search"
           onSubmit={(event) => {
             event.preventDefault();
             handleSearch();
