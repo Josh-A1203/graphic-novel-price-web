@@ -12,6 +12,7 @@ function App() {
   const [loadingMessage, setLoadingMessage] = useState("Loading price data...");
   const [currentPage, setCurrentPage] = useState(1);
   const [jumpPage, setJumpPage] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   useEffect(() => {
     fetch("/data/prices.csv")
@@ -73,20 +74,28 @@ function App() {
       });
   }, []);
 
-  const filteredBooks = books.filter((book) =>
-    book.title.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredBooks = books.filter((book) => {
+    const search = searchTerm.toLowerCase();
+    return (
+      book.title.toLowerCase().includes(search) ||
+      book.isbn.toLowerCase().includes(search)
+    );
+  });
 
   const totalPages = Math.max(1, Math.ceil(filteredBooks.length / BOOKS_PER_PAGE));
   const startIndex = (currentPage - 1) * BOOKS_PER_PAGE;
   const visibleBooks = filteredBooks.slice(startIndex, startIndex + BOOKS_PER_PAGE);
 
   const suggestions =
-    searchInput.trim().length > 0
+    showSuggestions && searchInput.trim().length > 0
       ? books
-          .filter((book) =>
-            book.title.toLowerCase().includes(searchInput.toLowerCase())
-          )
+          .filter((book) => {
+            const search = searchInput.toLowerCase();
+            return (
+              book.title.toLowerCase().includes(search) ||
+              book.isbn.toLowerCase().includes(search)
+            );
+          })
           .slice(0, 6)
       : [];
 
@@ -161,9 +170,10 @@ function App() {
   }
 
   function handleSearch() {
-    setSearchTerm(searchInput);
+    setSearchTerm(searchInput.trim());
     setSelectedBook(null);
     setCurrentPage(1);
+    setShowSuggestions(false);
   }
 
   function handleSuggestionClick(book) {
@@ -171,6 +181,7 @@ function App() {
     setSearchTerm(book.title);
     setSelectedBook(null);
     setCurrentPage(1);
+    setShowSuggestions(false);
   }
 
   function handlePreviousPage() {
@@ -304,9 +315,13 @@ function App() {
           <div className="search-wrapper">
             <input
               type="text"
-              placeholder="Search graphic novels..."
+              placeholder="Search title or ISBN..."
               value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
+              onFocus={() => setShowSuggestions(true)}
+              onChange={(event) => {
+                setSearchInput(event.target.value);
+                setShowSuggestions(true);
+              }}
             />
 
             {suggestions.length > 0 && (
@@ -318,6 +333,7 @@ function App() {
                     onClick={() => handleSuggestionClick(book)}
                   >
                     {book.title}
+                    <span className="suggestion-isbn">ISBN: {book.isbn}</span>
                   </button>
                 ))}
               </div>
@@ -327,20 +343,6 @@ function App() {
           <button type="submit">Search</button>
         </form>
       </header>
-
-      <section className="toolbar">
-        <div>
-          <h2>Browse Deals</h2>
-          <p>
-            {loadingMessage ||
-              `${filteredBooks.length} results found from live CSV data`}
-          </p>
-        </div>
-
-        <span className="sort-pill">
-          Page {currentPage} of {totalPages}
-        </span>
-      </section>
 
       {loadingMessage ? (
         <section className="status-card">
@@ -354,7 +356,18 @@ function App() {
               const discount = getDiscount(book, bestRetailer.price);
 
               return (
-                <article className="book-card" key={book.id}>
+                <article
+                  className="book-card"
+                  key={book.id}
+                  onClick={() => setSelectedBook(book)}
+                  role="button"
+                  tabIndex="0"
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      setSelectedBook(book);
+                    }
+                  }}
+                >
                   <img
                     src={book.cover}
                     alt={book.title}
@@ -380,7 +393,11 @@ function App() {
 
                     <button
                       className="card-button"
-                      onClick={() => setSelectedBook(book)}
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setSelectedBook(book);
+                      }}
                     >
                       View Prices
                     </button>
