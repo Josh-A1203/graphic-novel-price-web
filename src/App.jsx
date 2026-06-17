@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import Papa from "papaparse";
 import "./App.css";
 
 const BOOKS_PER_PAGE = 25;
@@ -13,66 +12,113 @@ function App() {
   const [currentPage, setCurrentPage] = useState(1);
   const [jumpPage, setJumpPage] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [priceHistoryTimeline, setPriceHistoryTimeline] = useState([]);
 
   useEffect(() => {
-    fetch("/data/prices.csv")
-      .then((response) => {
-        if (!response.ok) throw new Error("Could not load prices.csv");
-        return response.text();
+    setLoadingMessage("Fetching today's top deals from your SQLite database...");
+    
+    fetch("http://localhost:8000/deals?limit=75")
+      .then((res) => {
+        if (!res.ok) throw new Error("Could not communicate with the running API server.");
+        return res.json();
       })
-      .then((csvText) => {
-        Papa.parse(csvText, {
-          header: true,
-          skipEmptyLines: true,
-          complete: async (results) => {
-            const groupedBooks = {};
+      .then(async (dealsData) => {
+        const groupedBooks = {};
 
-            results.data.forEach((row) => {
-              const isbn = cleanValue(row.isbn);
-              const title = cleanValue(row.title);
-              const retailer = cleanValue(row.retailer);
-              const url = cleanValue(row.url);
-              const price = Number(cleanValue(row.price));
+        dealsData.forEach((row) => {
+          const isbn = String(row.isbn || "").trim();
+          const retailer = String(row.retailer || "").trim();
+          const price = Number(row.price);
 
-              if (!isbn || !title || !retailer || !price || Number.isNaN(price)) return;
+          if (!isbn || !retailer || Number.isNaN(price)) return;
 
-              if (!groupedBooks[isbn]) {
-                groupedBooks[isbn] = {
-                  id: isbn,
-                  isbn,
-                  title,
-                  cover: createPlaceholderCover(title),
-                  fallbackCover: createPlaceholderCover(title),
-                  retailers: [],
-                };
-              }
+          const cleanTitle = `Graphic Novel (${isbn})`;
 
-              groupedBooks[isbn].retailers.push({ name: retailer, price, url });
-            });
+          if (!groupedBooks[isbn]) {
+            groupedBooks[isbn] = {
+              id: isbn,
+              isbn,
+              title: cleanTitle,
+              cover: createPlaceholderCover(cleanTitle),
+              fallbackCover: createPlaceholderCover(cleanTitle),
+              retailers: [],
+            };
+          }
 
-            const formattedBooks = Object.values(groupedBooks)
-              .filter((book) => book.retailers.length > 0)
-              .sort((a, b) => a.title.localeCompare(b.title));
-
-            const booksWithCovers = await Promise.all(
-              formattedBooks.map(async (book) => {
-                const cover = await findBestCover(book.isbn, book.title);
-                return { ...book, cover };
-              })
-            );
-
-            setBooks(booksWithCovers);
-            setLoadingMessage("");
-          },
-          error: () => setLoadingMessage("Could not parse the price data."),
+          groupedBooks[isbn].retailers.push({ name: retailer, price, url: "#" });
         });
-      })
-      .catch(() => {
-        setLoadingMessage(
-          "Could not load price data. Make sure public/data/prices.csv exists."
+
+        const formattedBooks = Object.values(groupedBooks);
+
+        const booksWithCovers = await Promise.all(
+          formattedBooks.map(async (book) => {
+            const cover = await findBestCover(book.isbn, book.title);
+            return { ...book, cover };
+          })
         );
+
+        setBooks(booksWithCovers);
+        setLoadingMessage("");
+      })
+      .catch((err) => {
+        console.error(err);
+        setLoadingMessage("Failed to pull database framework. Please check if Uvicorn is active on port 8000.");
       });
   }, []);
+
+  function handleSearch() {
+    const query = searchInput.trim();
+    if (!query) return;
+
+    setSearchTerm(query);
+    setSelectedBook(null);
+    setCurrentPage(1);
+    setShowSuggestions(false);
+    setLoadingMessage(`Searching database records for "${query}"...`);
+
+    fetch(`http://localhost:8000/book/${query}/prices`)
+      .then((res) => res.json())
+      .then(async (pricesData) => {
+        if (!pricesData || pricesData.length === 0) {
+          setBooks([]);
+          setLoadingMessage(`No records found for ISBN "${query}".`);
+          return;
+        }
+
+        const cleanTitle = `Graphic Novel (${query})`;
+        const searchedBook = {
+          id: query,
+          isbn: query,
+          title: cleanTitle,
+          cover: await findBestCover(query, cleanTitle),
+          fallbackCover: createPlaceholderCover(cleanTitle),
+          retailers: pricesData.map((item) => ({
+            name: item[0],
+            price: item[1],
+            url: "#"
+          }))
+        };
+
+        setBooks([searchedBook]);
+        setLoadingMessage("");
+      })
+      .catch((err) => {
+        console.error(err);
+        setLoadingMessage("Network loss: Error reading from database pipelines.");
+      });
+  }
+
+  function handleSelectBook(book) {
+    setSelectedBook(book);
+    setPriceHistoryTimeline([]);
+
+    fetch(`http://localhost:8000/book/${book.isbn}/history`)
+      .then((res) => res.json())
+      .then((data) => {
+        setPriceHistoryTimeline(data.history || []);
+      })
+      .catch((err) => console.error("Error reading book tracker timestamp metrics:", err));
+  }
 
   const filteredBooks = books.filter((book) => {
     const search = searchTerm.toLowerCase();
@@ -99,10 +145,6 @@ function App() {
           .slice(0, 6)
       : [];
 
-  function cleanValue(value) {
-    return String(value || "").trim();
-  }
-
   function getOpenLibraryCover(isbn) {
     return `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg?default=false`;
   }
@@ -115,11 +157,6 @@ function App() {
 
     const googleCoverByIsbn = await getGoogleBooksCover(`isbn:${isbn}`);
     if (googleCoverByIsbn) return googleCoverByIsbn;
-
-    const googleCoverByTitle = await getGoogleBooksCover(
-      `intitle:${encodeURIComponent(title)}`
-    );
-    if (googleCoverByTitle) return googleCoverByTitle;
 
     return placeholder;
   }
@@ -135,26 +172,12 @@ function App() {
 
   async function getGoogleBooksCover(query) {
     try {
-      const response = await fetch(
-        `https://www.googleapis.com/books/v1/volumes?q=${query}`
-      );
-
+      const response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${query}`);
       if (!response.ok) return null;
-
       const data = await response.json();
       const imageLinks = data.items?.[0]?.volumeInfo?.imageLinks;
-
       if (!imageLinks) return null;
-
-      return (
-        imageLinks.extraLarge ||
-        imageLinks.large ||
-        imageLinks.medium ||
-        imageLinks.small ||
-        imageLinks.thumbnail ||
-        imageLinks.smallThumbnail ||
-        null
-      );
+      return imageLinks.thumbnail || null;
     } catch {
       return null;
     }
@@ -169,18 +192,10 @@ function App() {
     event.currentTarget.src = fallbackCover;
   }
 
-  function handleSearch() {
-    setSearchTerm(searchInput.trim());
-    setSelectedBook(null);
-    setCurrentPage(1);
-    setShowSuggestions(false);
-  }
-
   function handleSuggestionClick(book) {
-    setSearchInput(book.title);
-    setSearchTerm(book.title);
-    setSelectedBook(null);
-    setCurrentPage(1);
+    setSearchInput(book.isbn);
+    setSearchTerm(book.isbn);
+    handleSelectBook(book);
     setShowSuggestions(false);
   }
 
@@ -195,21 +210,21 @@ function App() {
   function handleJumpToPage(event) {
     event.preventDefault();
     const requestedPage = Number(jumpPage);
-
     if (!requestedPage || Number.isNaN(requestedPage)) return;
-
     const safePage = Math.min(Math.max(requestedPage, 1), totalPages);
     setCurrentPage(safePage);
     setJumpPage("");
   }
 
   function getBestRetailer(book) {
+    if (!book.retailers || book.retailers.length === 0) return { name: "N/A", price: 0 };
     return book.retailers.reduce((best, current) =>
       current.price < best.price ? current : best
     );
   }
 
   function getHighestListedPrice(book) {
+    if (!book.retailers || book.retailers.length === 0) return 0;
     return Math.max(...book.retailers.map((retailer) => retailer.price));
   }
 
@@ -261,8 +276,22 @@ function App() {
           </div>
         </section>
 
+        {priceHistoryTimeline.length > 0 && (
+          <section className="prices-section" style={{ marginBottom: "30px" }}>
+            <h2>📈 Price Tracking Timeline Trends</h2>
+            <div style={{ maxHeight: "200px", overflowY: "auto", background: "#111827", padding: "20px", borderRadius: "12px", border: "1px solid #374151" }}>
+              {priceHistoryTimeline.map((item, idx) => (
+                <div key={idx} style={{ display: "flex", justifyContent: "space-between", margin: "10px 0", color: "#f3f4f6", borderBottom: "1px dashed #4b5563", paddingBottom: "6px", fontSize: "0.95rem" }}>
+                  <span style={{ color: "#9ca3af" }}>Timestamp (Integer): {item.date}</span>
+                  <span>{item.retailer}: <strong style={{ color: "#a855f7" }}>${Number(item.price).toFixed(2)}</strong></span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section className="prices-section">
-          <h2>Current Prices</h2>
+          <h2>Current Prices Across Outlets</h2>
 
           {selectedBook.retailers.map((retailer) => {
             const isBest = retailer.name === bestRetailer.name;
@@ -275,7 +304,7 @@ function App() {
               >
                 <div>
                   <h3>{retailer.name}</h3>
-                  <p>Online retailer</p>
+                  <p>Verified Daily Outlet</p>
                 </div>
 
                 <div className="price-side">
@@ -315,7 +344,7 @@ function App() {
           <div className="search-wrapper">
             <input
               type="text"
-              placeholder="Search title or ISBN..."
+              placeholder="Search graphic novels by ISBN..."
               value={searchInput}
               onFocus={() => setShowSuggestions(true)}
               onChange={(event) => {
@@ -359,12 +388,12 @@ function App() {
                 <article
                   className="book-card"
                   key={book.id}
-                  onClick={() => setSelectedBook(book)}
+                  onClick={() => handleSelectBook(book)}
                   role="button"
                   tabIndex="0"
                   onKeyDown={(event) => {
                     if (event.key === "Enter") {
-                      setSelectedBook(book);
+                      handleSelectBook(book);
                     }
                   }}
                 >
@@ -383,7 +412,6 @@ function App() {
                       <span className="new-price">
                         ${bestRetailer.price.toFixed(2)}
                       </span>
-
                       {discount > 0 && (
                         <span className="discount">-{discount}%</span>
                       )}
@@ -396,7 +424,7 @@ function App() {
                       type="button"
                       onClick={(event) => {
                         event.stopPropagation();
-                        setSelectedBook(book);
+                        handleSelectBook(book);
                       }}
                     >
                       View Prices
@@ -411,15 +439,10 @@ function App() {
             <button onClick={handlePreviousPage} disabled={currentPage === 1}>
               Previous
             </button>
-
             <span>
               Page {currentPage} of {totalPages}
             </span>
-
-            <button
-              onClick={handleNextPage}
-              disabled={currentPage === totalPages}
-            >
+            <button onClick={handleNextPage} disabled={currentPage === totalPages}>
               Next
             </button>
 
@@ -432,7 +455,6 @@ function App() {
                 value={jumpPage}
                 onChange={(event) => setJumpPage(event.target.value)}
               />
-
               <button type="submit">Go</button>
             </form>
           </section>
