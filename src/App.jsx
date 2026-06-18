@@ -17,7 +17,7 @@ function App() {
   useEffect(() => {
     setLoadingMessage("Fetching today's top deals from your SQLite database...");
     
-    fetch("http://localhost:8000/deals?limit=75")
+    fetch("http://localhost:8000/deals?limit=150")
       .then((res) => {
         if (!res.ok) throw new Error("Could not communicate with the running API server.");
         return res.json();
@@ -29,23 +29,23 @@ function App() {
           const isbn = String(row.isbn || "").trim();
           const retailer = String(row.retailer || "").trim();
           const price = Number(row.price);
+          const realTitle = row.title ? String(row.title).trim() : `Graphic Novel (${isbn})`;
+          const trueUrl = row.url || "#";
 
           if (!isbn || !retailer || Number.isNaN(price)) return;
-
-          const cleanTitle = `Graphic Novel (${isbn})`;
 
           if (!groupedBooks[isbn]) {
             groupedBooks[isbn] = {
               id: isbn,
               isbn,
-              title: cleanTitle,
-              cover: createPlaceholderCover(cleanTitle),
-              fallbackCover: createPlaceholderCover(cleanTitle),
+              title: realTitle,
+              cover: createPlaceholderCover(realTitle),
+              fallbackCover: createPlaceholderCover(realTitle),
               retailers: [],
             };
           }
 
-          groupedBooks[isbn].retailers.push({ name: retailer, price, url: "#" });
+          groupedBooks[isbn].retailers.push({ name: retailer, price, url: trueUrl });
         });
 
         const formattedBooks = Object.values(groupedBooks);
@@ -57,6 +57,8 @@ function App() {
           })
         );
 
+        booksWithCovers.sort((a, b) => a.title.localeCompare(b.title));
+
         setBooks(booksWithCovers);
         setLoadingMessage("");
       })
@@ -65,6 +67,51 @@ function App() {
         setLoadingMessage("Failed to pull database framework. Please check if Uvicorn is active on port 8000.");
       });
   }, []);
+
+  async function findBestCover(isbn, title) {
+    const placeholder = createPlaceholderCover(title);
+    const openLibraryCover = `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg?default=false`;
+
+    if (await imageExists(openLibraryCover)) return openLibraryCover;
+
+    const googleCoverByIsbn = await getGoogleBooksCover(`isbn:${isbn}`);
+    if (googleCoverByIsbn) return googleCoverByIsbn;
+
+    const googleCoverByTitle = await getGoogleBooksCover(`intitle:${encodeURIComponent(title)}`);
+    if (googleCoverByTitle) return googleCoverByTitle;
+
+    return placeholder;
+  }
+
+  async function imageExists(url) {
+    return new Promise((resolve) => {
+      const image = new Image();
+      image.onload = () => resolve(true);
+      image.onerror = () => resolve(false);
+      image.src = url;
+    });
+  }
+
+  async function getGoogleBooksCover(query) {
+    try {
+      const response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${query}`);
+      if (!response.ok) return null;
+      const data = await response.json();
+      const imageLinks = data.items?.[0]?.volumeInfo?.imageLinks;
+      if (!imageLinks) return null;
+      return (
+        imageLinks.extraLarge ||
+        imageLinks.large ||
+        imageLinks.medium ||
+        imageLinks.small ||
+        imageLinks.thumbnail ||
+        imageLinks.smallThumbnail ||
+        null
+      );
+    } catch {
+      return null;
+    }
+  }
 
   function handleSearch() {
     const query = searchInput.trim();
@@ -76,26 +123,32 @@ function App() {
     setShowSuggestions(false);
     setLoadingMessage(`Searching database records for "${query}"...`);
 
-    fetch(`http://localhost:8000/book/${query}/prices`)
-      .then((res) => res.json())
+    fetch(`http://localhost:8000/book/${encodeURIComponent(query)}/prices`)
+      .then((res) => {
+        if (!res.ok) throw new Error("Server error");
+        return res.json();
+      })
       .then(async (pricesData) => {
         if (!pricesData || pricesData.length === 0) {
           setBooks([]);
-          setLoadingMessage(`No records found for ISBN "${query}".`);
+          setLoadingMessage(`No records found for "${query}".`);
           return;
         }
 
-        const cleanTitle = `Graphic Novel (${query})`;
+        const firstMatch = pricesData[0];
+        const realTitle = firstMatch.title || `Graphic Novel (${query})`;
+        const realIsbn = firstMatch.isbn || query;
+
         const searchedBook = {
-          id: query,
-          isbn: query,
-          title: cleanTitle,
-          cover: await findBestCover(query, cleanTitle),
-          fallbackCover: createPlaceholderCover(cleanTitle),
+          id: realIsbn,
+          isbn: realIsbn,
+          title: realTitle,
+          cover: await findBestCover(realIsbn, realTitle),
+          fallbackCover: createPlaceholderCover(realTitle),
           retailers: pricesData.map((item) => ({
-            name: item[0],
-            price: item[1],
-            url: "#"
+            name: item.retailer,
+            price: item.price,
+            url: item.url || "#"
           }))
         };
 
@@ -104,7 +157,7 @@ function App() {
       })
       .catch((err) => {
         console.error(err);
-        setLoadingMessage("Network loss: Error reading from database pipelines.");
+        setLoadingMessage("Error reading matching rows from database pipelines.");
       });
   }
 
@@ -145,44 +198,6 @@ function App() {
           .slice(0, 6)
       : [];
 
-  function getOpenLibraryCover(isbn) {
-    return `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg?default=false`;
-  }
-
-  async function findBestCover(isbn, title) {
-    const placeholder = createPlaceholderCover(title);
-    const openLibraryCover = getOpenLibraryCover(isbn);
-
-    if (await imageExists(openLibraryCover)) return openLibraryCover;
-
-    const googleCoverByIsbn = await getGoogleBooksCover(`isbn:${isbn}`);
-    if (googleCoverByIsbn) return googleCoverByIsbn;
-
-    return placeholder;
-  }
-
-  async function imageExists(url) {
-    return new Promise((resolve) => {
-      const image = new Image();
-      image.onload = () => resolve(true);
-      image.onerror = () => resolve(false);
-      image.src = url;
-    });
-  }
-
-  async function getGoogleBooksCover(query) {
-    try {
-      const response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${query}`);
-      if (!response.ok) return null;
-      const data = await response.json();
-      const imageLinks = data.items?.[0]?.volumeInfo?.imageLinks;
-      if (!imageLinks) return null;
-      return imageLinks.thumbnail || null;
-    } catch {
-      return null;
-    }
-  }
-
   function createPlaceholderCover(title) {
     const shortTitle = encodeURIComponent(title.slice(0, 30));
     return `https://placehold.co/300x450/1f2937/c084fc?text=${shortTitle}`;
@@ -193,8 +208,8 @@ function App() {
   }
 
   function handleSuggestionClick(book) {
-    setSearchInput(book.isbn);
-    setSearchTerm(book.isbn);
+    setSearchInput(book.title);
+    setSearchTerm(book.title);
     handleSelectBook(book);
     setShowSuggestions(false);
   }
@@ -282,7 +297,7 @@ function App() {
             <div style={{ maxHeight: "200px", overflowY: "auto", background: "#111827", padding: "20px", borderRadius: "12px", border: "1px solid #374151" }}>
               {priceHistoryTimeline.map((item, idx) => (
                 <div key={idx} style={{ display: "flex", justifyContent: "space-between", margin: "10px 0", color: "#f3f4f6", borderBottom: "1px dashed #4b5563", paddingBottom: "6px", fontSize: "0.95rem" }}>
-                  <span style={{ color: "#9ca3af" }}>Timestamp (Integer): {item.date}</span>
+                  <span style={{ color: "#9ca3af" }}>Timestamp: {item.date}</span>
                   <span>{item.retailer}: <strong style={{ color: "#a855f7" }}>${Number(item.price).toFixed(2)}</strong></span>
                 </div>
               ))}
@@ -344,7 +359,7 @@ function App() {
           <div className="search-wrapper">
             <input
               type="text"
-              placeholder="Search graphic novels by ISBN..."
+              placeholder="Search by Title or ISBN..."
               value={searchInput}
               onFocus={() => setShowSuggestions(true)}
               onChange={(event) => {
