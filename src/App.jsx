@@ -17,7 +17,7 @@ function App() {
   useEffect(() => {
     setLoadingMessage("Fetching today's top deals from your SQLite database...");
     
-    fetch("http://localhost:8000/deals?limit=150")
+    fetch("https://graphic-novel-price-api.onrender.com/deals?limit=150")
       .then((res) => {
         if (!res.ok) throw new Error("Could not communicate with the running API server.");
         return res.json();
@@ -123,7 +123,7 @@ function App() {
     setShowSuggestions(false);
     setLoadingMessage(`Searching database records for "${query}"...`);
 
-    fetch(`http://localhost:8000/book/${encodeURIComponent(query)}/prices`)
+    fetch("https://graphic-novel-price-api.onrender.com/book/${encodeURIComponent(query)}/prices")
       .then((res) => {
         if (!res.ok) throw new Error("Server error");
         return res.json();
@@ -165,7 +165,7 @@ function App() {
     setSelectedBook(book);
     setPriceHistoryTimeline([]);
 
-    fetch(`http://localhost:8000/book/${book.isbn}/history`)
+    fetch("https://graphic-novel-price-api.onrender.com/book/${book.isbn}/history")
       .then((res) => res.json())
       .then((data) => {
         setPriceHistoryTimeline(data.history || []);
