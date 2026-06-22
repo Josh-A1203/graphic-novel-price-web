@@ -111,31 +111,11 @@ body {
   background: #1f2937;
 }
 
-.toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin: 18px 0 14px;
-}
-
-.toolbar h2 {
-  margin: 0 0 3px;
-  font-size: 22px;
-}
-
-.toolbar p,
-.price-row p {
+.suggestion-isbn {
+  display: block;
   color: #94a3b8;
-  margin: 0;
-}
-
-.sort-pill {
-  border: 1px solid #7c3aed;
-  color: #c4b5fd;
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: #151923;
-  font-size: 14px;
+  font-size: 12px;
+  margin-top: 3px;
 }
 
 .book-grid {
@@ -152,6 +132,7 @@ body {
   overflow: hidden;
   transition: 0.2s ease;
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22);
+  cursor: pointer;
 }
 
 .book-card:hover {
@@ -305,6 +286,11 @@ body {
   margin-bottom: 10px;
 }
 
+.price-row p {
+  color: #94a3b8;
+  margin: 0;
+}
+
 .best-row {
   border-color: #8b5cf6;
   background: #1c2233;
@@ -373,14 +359,20 @@ body {
 }
 
 @media (max-width: 900px) {
+  .app {
+    padding: 14px;
+  }
+
   .topbar {
     flex-direction: column;
     align-items: stretch;
+    padding: 14px;
   }
 
   .topbar h1 {
     text-align: center;
     white-space: normal;
+    font-size: 22px;
   }
 
   .topbar-search {
@@ -390,26 +382,63 @@ body {
   .book-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+
+  .book-card img {
+    height: 165px;
+  }
 }
 
 @media (max-width: 700px) {
   .book-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
   }
 
   .details-layout {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+
+  .cover-panel img {
+    height: 360px;
+  }
+
+  .details-info h1 {
+    font-size: 32px;
+    letter-spacing: -1px;
+  }
+
+  .deal-summary {
     grid-template-columns: 1fr;
   }
 
   .price-row {
     flex-direction: column;
     align-items: stretch;
+    gap: 12px;
+  }
+
+  .price-side {
+    justify-content: flex-start;
+  }
+
+  .pagination {
+    gap: 8px;
+  }
+
+  .jump-form {
+    width: 100%;
+    justify-content: center;
   }
 }
 
 @media (max-width: 500px) {
-  .book-grid {
-    grid-template-columns: 1fr;
+  .app {
+    padding: 10px;
+  }
+
+  .topbar h1 {
+    font-size: 20px;
   }
 
   .topbar-search {
@@ -420,11 +449,52 @@ body {
     width: 100%;
   }
 
-  .suggestion-isbn {
-  display: block;
-  color: #94a3b8;
-  font-size: 12px;
-  margin-top: 3px;
-}
+  .book-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
 
+  .book-card img {
+    height: 145px;
+  }
+
+  .card-content {
+    padding: 8px;
+  }
+
+  .card-content h3 {
+    font-size: 12px;
+    min-height: 45px;
+  }
+
+  .new-price,
+  .price {
+    font-size: 16px;
+  }
+
+  .best-deal,
+  .best-tag,
+  .discount {
+    font-size: 11px;
+  }
+
+  .card-button {
+    font-size: 12px;
+    padding: 8px;
+  }
+
+  .pagination {
+    flex-direction: column;
+  }
+
+  .pagination button,
+  .jump-form button,
+  .jump-form input {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .jump-form {
+    flex-direction: column;
+  }
 }

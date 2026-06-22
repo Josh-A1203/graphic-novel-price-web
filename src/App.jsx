@@ -169,12 +169,15 @@ function App() {
     event.currentTarget.src = fallbackCover;
   }
 
-  function handleSearch() {
-    setSearchTerm(searchInput.trim());
-    setSelectedBook(null);
-    setCurrentPage(1);
-    setShowSuggestions(false);
-  }
+function handleSearch() {
+  const cleanedSearch = searchInput.trim();
+
+  setSearchTerm(cleanedSearch);
+  setSelectedBook(null);
+  setCurrentPage(1);
+  setJumpPage("");
+  setShowSuggestions(false);
+}
 
   function handleSuggestionClick(book) {
     setSearchInput(book.title);
@@ -314,16 +317,16 @@ function App() {
         >
           <div className="search-wrapper">
             <input
-              type="text"
-              placeholder="Search title or ISBN..."
-              value={searchInput}
-              onFocus={() => setShowSuggestions(true)}
-              onChange={(event) => {
-                setSearchInput(event.target.value);
-                setShowSuggestions(true);
-              }}
-            />
-
+  type="text"
+  placeholder="Search title or ISBN..."
+  value={searchInput}
+  onFocus={() => setShowSuggestions(true)}
+  onChange={(event) => {
+    setSearchInput(event.target.value);
+    setShowSuggestions(true);
+    setCurrentPage(1);
+  }}
+/>
             {suggestions.length > 0 && (
               <div className="suggestions">
                 {suggestions.map((book) => (
