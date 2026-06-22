@@ -17,9 +17,9 @@ function App() {
 
   // 1. Fetch Top Deals from Render Database API on Component Load
   useEffect(() => {
-    setLoadingMessage("Fetching today's top deals from your SQLite database...");
+    setLoadingMessage("Fetching today's top deals from today's database...");
     
-    fetch(`${BASE_API_URL}/deals?limit=500000`)
+    fetch(`${BASE_API_URL}/deals?limit=100000`)
       .then((res) => {
         if (!res.ok) throw new Error("Could not communicate with the running API server.");
         return res.json();
@@ -46,7 +46,7 @@ function App() {
             retailers: [],
           };
         } 
-        
+
         else if (realTitle && (!groupedBooks[isbn].title || groupedBooks[isbn].title.startsWith("Graphic Novel"))) {
           groupedBooks[isbn].title = realTitle;
         }
@@ -129,7 +129,7 @@ function App() {
     event.currentTarget.src = fallbackCover;
   }
 
-  // 3. Dynamic API Search (Fixed template literals utilizing proper backticks)
+// 3. Optimized Database Search (Handles all editions and variant covers)
   function handleSearch() {
     const query = searchInput.trim();
     if (!query) return;
@@ -152,24 +152,41 @@ function App() {
           return;
         }
 
-        const firstMatch = pricesData[0];
-        const realTitle = firstMatch.title || `Graphic Novel (${query})`;
-        const realIsbn = firstMatch.isbn || query;
+        const groupedBooks = {};
+        pricesData.forEach((row) => {
+          const isbn = String(row.isbn || "").trim();
+          const retailer = String(row.retailer || "").trim();
+          const price = Number(row.price);
+          const realTitle = row.title ? String(row.title).trim() : `Graphic Novel (${isbn})`;
+          const trueUrl = row.url || "#";
 
-        const searchedBook = {
-          id: realIsbn,
-          isbn: realIsbn,
-          title: realTitle,
-          cover: await findBestCover(realIsbn, realTitle),
-          fallbackCover: createPlaceholderCover(realTitle),
-          retailers: pricesData.map((item) => ({
-            name: item.retailer,
-            price: item.price,
-            url: item.url || "#"
-          }))
-        };
+          if (!isbn || !retailer || Number.isNaN(price)) return;
 
-        setBooks([searchedBook]);
+          const uniqueGroupKey = `${isbn}-${realTitle.toLowerCase()}`;
+
+          if (!groupedBooks[uniqueGroupKey]) {
+            groupedBooks[uniqueGroupKey] = {
+              id: uniqueGroupKey,
+              isbn,
+              title: realTitle,
+              cover: createPlaceholderCover(realTitle),
+              fallbackCover: createPlaceholderCover(realTitle),
+              retailers: [],
+            };
+          }
+          groupedBooks[uniqueGroupKey].retailers.push({ name: retailer, price, url: trueUrl });
+        });
+
+        const formattedBooks = Object.values(groupedBooks);
+
+        const booksWithCovers = await Promise.all(
+          formattedBooks.map(async (book) => {
+            const cover = await findBestCover(book.isbn, book.title);
+            return { ...book, cover };
+          })
+        );
+
+        setBooks(booksWithCovers);
         setLoadingMessage("");
       })
       .catch((err) => {
