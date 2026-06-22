@@ -17,7 +17,7 @@ function App() {
   useEffect(() => {
     setLoadingMessage("Fetching today's top deals from your SQLite database...");
     
-    fetch("https://graphic-novel-price-api.onrender.com/deals?limit=500")
+    fetch("https://graphic-novel-price-api.onrender.com/deals?limit=500000")
       .then((res) => {
         if (!res.ok) throw new Error("Could not communicate with the running API server.");
         return res.json();
