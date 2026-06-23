@@ -34,7 +34,9 @@ function App() {
               const url = cleanValue(row.url);
               const price = Number(cleanValue(row.price));
 
-              if (!isbn || !title || !retailer || !price || Number.isNaN(price)) return;
+              if (!isbn || !title || !retailer || !price || Number.isNaN(price)) {
+                return;
+              }
 
               if (!groupedBooks[isbn]) {
                 groupedBooks[isbn] = {
@@ -76,21 +78,30 @@ function App() {
 
   const filteredBooks = books.filter((book) => {
     const search = searchTerm.toLowerCase();
+
     return (
       book.title.toLowerCase().includes(search) ||
       book.isbn.toLowerCase().includes(search)
     );
   });
 
-  const totalPages = Math.max(1, Math.ceil(filteredBooks.length / BOOKS_PER_PAGE));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredBooks.length / BOOKS_PER_PAGE)
+  );
+
   const startIndex = (currentPage - 1) * BOOKS_PER_PAGE;
-  const visibleBooks = filteredBooks.slice(startIndex, startIndex + BOOKS_PER_PAGE);
+  const visibleBooks = filteredBooks.slice(
+    startIndex,
+    startIndex + BOOKS_PER_PAGE
+  );
 
   const suggestions =
     showSuggestions && searchInput.trim().length > 0
       ? books
           .filter((book) => {
             const search = searchInput.toLowerCase();
+
             return (
               book.title.toLowerCase().includes(search) ||
               book.isbn.toLowerCase().includes(search)
@@ -162,28 +173,29 @@ function App() {
 
   function createPlaceholderCover(title) {
     const shortTitle = encodeURIComponent(title.slice(0, 30));
-    return `https://placehold.co/300x450/1f2937/c084fc?text=${shortTitle}`;
+    return `https://placehold.co/300x450/101827/9f7aea?text=${shortTitle}`;
   }
 
   function handleImageError(event, fallbackCover) {
     event.currentTarget.src = fallbackCover;
   }
 
-function handleSearch() {
-  const cleanedSearch = searchInput.trim();
+  function handleSearch() {
+    const cleanedSearch = searchInput.trim();
 
-  setSearchTerm(cleanedSearch);
-  setSelectedBook(null);
-  setCurrentPage(1);
-  setJumpPage("");
-  setShowSuggestions(false);
-}
+    setSearchTerm(cleanedSearch);
+    setSelectedBook(null);
+    setCurrentPage(1);
+    setJumpPage("");
+    setShowSuggestions(false);
+  }
 
   function handleSuggestionClick(book) {
     setSearchInput(book.title);
     setSearchTerm(book.title);
     setSelectedBook(null);
     setCurrentPage(1);
+    setJumpPage("");
     setShowSuggestions(false);
   }
 
@@ -197,11 +209,13 @@ function handleSearch() {
 
   function handleJumpToPage(event) {
     event.preventDefault();
+
     const requestedPage = Number(jumpPage);
 
     if (!requestedPage || Number.isNaN(requestedPage)) return;
 
     const safePage = Math.min(Math.max(requestedPage, 1), totalPages);
+
     setCurrentPage(safePage);
     setJumpPage("");
   }
@@ -218,8 +232,35 @@ function handleSearch() {
 
   function getDiscount(book, price) {
     const highestListedPrice = getHighestListedPrice(book);
+
     if (!highestListedPrice || highestListedPrice <= price) return 0;
+
     return Math.round(((highestListedPrice - price) / highestListedPrice) * 100);
+  }
+
+  function renderTopNav() {
+    return (
+      <header className="topbar">
+        <div className="brand">
+          <img
+            src="/images/Logo1.png"
+            alt="Get Booked GPT"
+            className="brand-icon"
+          />
+          <span>Get Booked GPT</span>
+        </div>
+
+        <nav className="nav-links">
+          <a href="#deals" className="active-link">
+            🔍 Track Prices
+          </a>
+          <a href="#features">💜 Read More</a>
+          <button className="theme-button" type="button">
+            ◐
+          </button>
+        </nav>
+      </header>
+    );
   }
 
   if (selectedBook) {
@@ -228,6 +269,8 @@ function handleSearch() {
 
     return (
       <main className="app">
+        {renderTopNav()}
+
         <button className="back-button" onClick={() => setSelectedBook(null)}>
           ← Back to deals
         </button>
@@ -283,7 +326,11 @@ function handleSearch() {
 
                 <div className="price-side">
                   <span className="price">${retailer.price.toFixed(2)}</span>
-                  {discount > 0 && <span className="discount">-{discount}%</span>}
+
+                  {discount > 0 && (
+                    <span className="discount">-{discount}%</span>
+                  )}
+
                   {isBest && <span className="best-tag">Best Deal</span>}
 
                   <a
@@ -305,11 +352,13 @@ function handleSearch() {
 
   return (
     <main className="app">
-      <header className="topbar">
-        <h1>Graphic Novel Price Tracker</h1>
+      {renderTopNav()}
+
+      <section className="hero-panel">
+        <div className="hero-watermark" />
 
         <form
-          className="topbar-search"
+          className="hero-search"
           onSubmit={(event) => {
             event.preventDefault();
             handleSearch();
@@ -317,16 +366,17 @@ function handleSearch() {
         >
           <div className="search-wrapper">
             <input
-  type="text"
-  placeholder="Search title or ISBN..."
-  value={searchInput}
-  onFocus={() => setShowSuggestions(true)}
-  onChange={(event) => {
-    setSearchInput(event.target.value);
-    setShowSuggestions(true);
-    setCurrentPage(1);
-  }}
-/>
+              type="text"
+              placeholder="Search title or ISBN..."
+              value={searchInput}
+              onFocus={() => setShowSuggestions(true)}
+              onChange={(event) => {
+                setSearchInput(event.target.value);
+                setShowSuggestions(true);
+                setCurrentPage(1);
+              }}
+            />
+
             {suggestions.length > 0 && (
               <div className="suggestions">
                 {suggestions.map((book) => (
@@ -345,7 +395,7 @@ function handleSearch() {
 
           <button type="submit">Search</button>
         </form>
-      </header>
+      </section>
 
       {loadingMessage ? (
         <section className="status-card">
@@ -353,7 +403,7 @@ function handleSearch() {
         </section>
       ) : (
         <>
-          <section className="book-grid">
+          <section className="book-grid" id="deals">
             {visibleBooks.map((book) => {
               const bestRetailer = getBestRetailer(book);
               const discount = getDiscount(book, bestRetailer.price);
@@ -438,6 +488,26 @@ function handleSearch() {
 
               <button type="submit">Go</button>
             </form>
+          </section>
+
+          <section className="feature-strip" id="features">
+            <div>
+              <span>🏷️</span>
+              <h3>Find Deals</h3>
+              <p>Compare prices from top retailers</p>
+            </div>
+
+            <div>
+              <span>📖</span>
+              <h3>Track Prices</h3>
+              <p>Monitor price drops and sales</p>
+            </div>
+
+            <div>
+              <span>💜</span>
+              <h3>Read More</h3>
+              <p>Discover new graphic novels</p>
+            </div>
           </section>
         </>
       )}
